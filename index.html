@@ -89,6 +89,10 @@ label{font-weight:500;font-size:.92rem}
 input[type=text],select{border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:10px 12px;min-height:44px;width:100%}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:.9rem}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:var(--paper);overflow:hidden}
+.stepper .icon{width:44px;height:44px;border-radius:0;font-size:1.3rem;color:var(--cobalt)}
+.stepper input{flex:1;min-width:0;border:0;background:transparent;text-align:center;font-size:1.1rem;font-weight:600;min-height:44px;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .chip.on{background:var(--cobalt);border-color:var(--cobalt);color:var(--paper)}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--paper)}
 .seg button{flex:1;border:0;background:transparent;padding:9px 6px;cursor:pointer;min-height:42px}
@@ -153,6 +157,7 @@ const NEW_PER_SESSION = 10;
 const LOCAL_KEY = "hanzi-cards-v1";
 const PREF_KEY = "hanzi-cards-prefs";
 const TOPICS = ["ทักทาย","ตัวเลขและเวลา","ครอบครัว","อาหารและเครื่องดื่ม","สั่งอาหารในร้าน","ช้อปปิ้งต่อราคา","การเดินทาง","สนามบิน","โรงแรม","สีและเสื้อผ้า","ร่างกายและสุขภาพ","ที่ทำงาน","โรงเรียน","อารมณ์ความรู้สึก","สภาพอากาศ","คำกริยาพื้นฐาน"];
+const MAX_WORDS = 50;
 const LEVELS = ["HSK 1","HSK 2","HSK 3","HSK 4","HSK 5","HSK 6"];
 
 const SAMPLE = {
@@ -202,6 +207,7 @@ function deckList(){
   if(S.loaded && list.length===0 && !S.sampleHidden){ S.decks[SAMPLE.id]=clone(SAMPLE); list=[S.decks[SAMPLE.id]]; }
   return list.sort((a,b)=>(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0));
 }
+function clampCount(n){ n=Math.round(Number(n)); return isFinite(n) ? Math.min(MAX_WORDS, Math.max(1, n)) : 10; }
 function counts(deck, now){
   now = now||Date.now(); let due=0, fresh=0, learned=0;
   for(const c of deck.cards){ if(!c.srs) fresh++; else { learned++; if(c.srs.due<=now) due++; } }
@@ -340,6 +346,7 @@ async function generate(){
   const C=S.create;
   const topic=C.topic.trim();
   if(!topic){ C.err="พิมพ์หัวข้อหรือเลือกจากรายการก่อน"; render(); return; }
+  C.count=clampCount(C.count);
   const target = C.addTo ? S.decks[C.addTo] : null;
   const existing = target ? target.cards.map(c=>c.hanzi) : [];
   C.busy=true; C.err=""; render();
@@ -481,13 +488,17 @@ function viewCreate(){
   let h='<div class="spread"><button class="btn ghost" data-act="'+(target?'backdeck':'home')+'">'+ICON.back+' กลับ</button></div>';
   h+='<div><h1>'+(target?'เพิ่มคำใน “'+esc(target.title)+'”':'สร้างชุดคำด้วย AI')+'</h1><div class="muted small">บอกหัวข้อ แล้ว AI จะเลือกคำ พินอิน คำแปล และประโยคตัวอย่างให้</div></div>';
   if(C.busy){
-    return h+'<div class="panel loader"><div class="dots"><i></i><i></i><i></i></div><div>AI กำลังเลือก '+C.count+' คำเรื่อง “'+esc(C.topic)+'”</div><div class="muted small">ใช้เวลาประมาณ 10–30 วินาที</div></div>';
+    return h+'<div class="panel loader"><div class="dots"><i></i><i></i><i></i></div><div>AI กำลังเลือก '+C.count+' คำเรื่อง “'+esc(C.topic)+'”</div><div class="muted small">ใช้เวลาประมาณ '+(C.count>25?'30–60':'10–30')+' วินาที</div></div>';
   }
   h+='<form class="panel" id="cform">';
   h+='<div class="field"><label for="topic">หัวข้อ</label><input type="text" id="topic" maxlength="80" placeholder="เช่น ผลไม้ หรือ คำที่ใช้ในร้านกาแฟ" value="'+esc(C.topic)+'"></div>';
   h+='<div class="chips" role="group" aria-label="หัวข้อแนะนำ">'+TOPICS.map(t=>'<button type="button" class="chip'+(C.topic===t?' on':'')+'" data-act="topic" data-v="'+esc(t)+'">'+esc(t)+'</button>').join("")+'</div>';
   h+='<div class="row"><div class="field" style="flex:1;min-width:140px"><label for="level">ระดับ</label><select id="level">'+LEVELS.map(l=>'<option'+(C.level===l?' selected':'')+'>'+l+'</option>').join("")+'</select></div>';
-  h+='<div class="field" style="flex:1;min-width:160px"><label id="cnt-l">จำนวนคำ</label><div class="seg" role="group" aria-labelledby="cnt-l">'+[10,20,30].map(n=>'<button type="button" data-act="count" data-v="'+n+'" class="'+(C.count===n?'on':'')+'" aria-pressed="'+(C.count===n)+'">'+n+'</button>').join("")+'</div></div></div>';
+  h+='<div class="field" style="flex:1;min-width:180px"><label for="count">จำนวนคำ (1–'+MAX_WORDS+')</label><div class="stepper">'+
+    '<button type="button" class="icon" data-act="step" data-v="-1" aria-label="ลดจำนวนคำ">−</button>'+
+    '<input type="number" id="count" inputmode="numeric" min="1" max="'+MAX_WORDS+'" value="'+C.count+'">'+
+    '<button type="button" class="icon" data-act="step" data-v="1" aria-label="เพิ่มจำนวนคำ">+</button></div>'+
+    '<div class="chips" role="group" aria-label="จำนวนที่ใช้บ่อย">'+[5,10,20,30,50].map(n=>'<button type="button" class="chip'+(C.count===n?' on':'')+'" data-act="count" data-v="'+n+'">'+n+'</button>').join("")+'</div></div></div>';
   if(C.err) h+='<div class="note err">'+esc(C.err)+'</div>';
   h+='<button class="btn primary block" type="submit">'+(target?'เพิ่มคำ':'สร้างชุดคำ')+'</button>';
   h+='</form>';
@@ -553,6 +564,9 @@ function render(){
     f.addEventListener("submit",e=>{e.preventDefault(); generate();});
     const t=document.getElementById("topic"); t.addEventListener("input",()=>{S.create.topic=t.value;});
     const l=document.getElementById("level"); l.addEventListener("change",()=>{S.create.level=l.value;});
+    const n=document.getElementById("count");
+    n.addEventListener("input",()=>{ if(n.value!=="") S.create.count=clampCount(n.value); });
+    n.addEventListener("change",()=>{ S.create.count=clampCount(n.value); n.value=S.create.count; });
   }
 }
 
@@ -571,7 +585,8 @@ document.addEventListener("click",e=>{
     case "new": S.create.addTo=null; S.create.err=""; S.view="create"; render(); window.scrollTo(0,0); break;
     case "more": { const d=S.decks[S.deckId]; if(!d) break; S.create.addTo=d.id; S.create.topic=d.topic||d.title; S.create.level=d.level||"HSK 1"; S.create.err=""; S.view="create"; render(); window.scrollTo(0,0); break; }
     case "topic": S.create.topic=el.dataset.v; S.create.err=""; render(); break;
-    case "count": S.create.count=+el.dataset.v; render(); break;
+    case "count": S.create.count=clampCount(+el.dataset.v); render(); break;
+    case "step": S.create.count=clampCount(S.create.count+(+el.dataset.v)); render(); break;
     case "front": S.prefs.front=el.dataset.v; savePrefs(); render(); break;
     case "study": startStudy(S.deckId,false); window.scrollTo(0,0); break;
     case "cram": startStudy(S.deckId,true); window.scrollTo(0,0); break;
